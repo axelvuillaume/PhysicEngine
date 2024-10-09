@@ -413,42 +413,56 @@ void initScene7()
 	printf("Scene 7. Qm Spring\n");
 
 	float restLength = 2.0f;
-	float springConstant = 5.0f;
+	float springConstant = 210.0f;
 
-	// Créer le registre de forces
+
 	QmForceRegistry* registry = new QmForceRegistry();
 
-	// Créer la particule mère
 	QmParticle* parentParticle = createParticleNoGravity();
 
 
-
-	// Créer une liste de particules enfants
 	std::vector<QmParticle*> childParticles;
-	for (int i = 0; i < 4; ++i) {
+	int numParticles = 12; 
+
+	childParticles.push_back(parentParticle);
+	for (int i = 0; i < numParticles; ++i) {
+
 		childParticles.push_back(createParticle());
 	}
 
-	QmSpring* springForce = new QmSpring(parentParticle, childParticles, restLength, springConstant);
+	std::vector<std::pair<int, std::vector<int>>> connections = {
+	{0, {1, 2, 3,4}},
+	{1, {2, 3, 4}},    
+	{2, {1, 3, 4}},   
+	{3, {1, 2, 4}},  
+	{4, {1,2,3,5}},
+	{5, {4,8,7,6}},   
+	{6, {5,8,7}}, 
+	{7, {5,6,8}},       
+	{8, {5,6,7,9}},      
+	{9, {8,10,11,12}}, 
+	{10, {9,11,12 }},
+	{11, {9,10,12}},
+	{12, {9,10,11}},
+	};
 
-	for (QmParticle* child : childParticles) {
-		registry->addForceRegistry(child, springForce);
-	}
+	for (const auto& connection : connections) {
+		int parentIndex = connection.first;
+		std::vector<QmParticle*> connectedParticles;
 
-	/*
 	
-	std::vector<QmParticle*> childParticles2;
-	for (int i = 0; i < 2; ++i) {
-		childParticles2.push_back(createParticle());
+		for (int childIndex : connection.second) {
+			connectedParticles.push_back(childParticles[childIndex]);
+		}
+
+		
+		QmSpring* springForce = new QmSpring(childParticles[parentIndex], connectedParticles, restLength, springConstant);
+
+		
+		for (QmParticle* child : connectedParticles) {
+			registry->addForceRegistry(child, springForce);
+		}
 	}
-
-
-	QmSpring* springForce2 = new QmSpring(childParticles[0], childParticles2, restLength, springConstant);
-	for (QmParticle* child : childParticles2) {
-		registry->addForceRegistry(child, springForce2);
-	}
-
-	*/
 
 	pxWorld.addForceRegistry(registry);
 
@@ -476,7 +490,7 @@ void initScene9()
 void drawSprings()
 {
 	// Parcours de tous les registres de force dans le monde physique
-	for (const auto& fr : pxWorld.getForceRegistries()) // Utilise la méthode ajoutée
+	for (const auto& fr : pxWorld.getForceRegistries())
 	{
 		// Itération sur chaque particule du registre
 		for (size_t i = 0; i < fr->getParticleCount(); ++i)
@@ -487,18 +501,20 @@ void drawSprings()
 			// Vérifie si le générateur de force est un ressort
 			if (auto* spring = dynamic_cast<QmSpring*>(forceGen))
 			{
-				// Récupérer les positions des particules
-				glm::vec3 pos1 = particle->getPos(); // Position de la première particule
+				// Récupérer la particule parent
+				QmParticle* parentParticle = spring->getParent();
+				glm::vec3 parentPos = parentParticle->getPos(); // Position du parent
 
-				// Itération sur toutes les autres particules liées par le ressort
-				for (QmParticle* otherParticle : spring->getAllParticles())
+				// Itération sur toutes les particules enfants liées par le ressort
+				for (QmParticle* childParticle : spring->getOtherParticles())
 				{
-					glm::vec3 pos2 = otherParticle->getPos();
+					glm::vec3 childPos = childParticle->getPos(); // Position de l'enfant
 
+					// Dessiner une ligne entre le parent et l'enfant
 					glBegin(GL_LINES);
 					glColor3f(1.f, 1.f, 1.f); // Couleur de la ligne (blanc)
-					glVertex3f(pos1.x, pos1.y, pos1.z); // Position de la première particule
-					glVertex3f(pos2.x, pos2.y, pos2.z); // Position de la seconde particule
+					glVertex3f(parentPos.x, parentPos.y, parentPos.z); // Position du parent
+					glVertex3f(childPos.x, childPos.y, childPos.z); // Position de l'enfant
 					glEnd();
 				}
 			}
@@ -704,3 +720,41 @@ int main(int argc, char** argv)
 	glutMainLoop();
 	return 0;
 }
+
+
+
+/*
+// Créer la particule mère
+QmParticle* parentParticle = createParticleNoGravity();
+
+std::vector<QmParticle*> childParticles;
+
+for (int i = 0; i < 3; ++i) {
+	childParticles.push_back(createParticle());
+}
+
+QmSpring* springForce = new QmSpring(parentParticle, childParticles, restLength, springConstant);
+
+for (QmParticle* child : childParticles) {
+	registry->addForceRegistry(child, springForce);
+}
+
+for (int i = 0; i < childParticles.size(); ++i) {
+	std::vector<QmParticle*> otherParticles;
+
+	for (int j = 0; j < childParticles.size(); ++j) {
+		if (i != j) {
+			otherParticles.push_back(childParticles[j]);
+		}
+	}
+
+	// Créer un ressort pour la particule i en tant que parent
+	QmSpring* springForce = new QmSpring(childParticles[i], otherParticles, restLength, springConstant);
+
+	// Ajouter la force pour chaque enfant
+	for (QmParticle* child : otherParticles) {
+		registry->addForceRegistry(child, springForce);
+	}
+}
+
+*/

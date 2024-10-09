@@ -24,7 +24,11 @@ namespace Quantum {
 		bool setGravityEnabled(bool gravity);
 		void interpolate(float dt);
 		float tick(float t);
+		void tickRK4(float t);
+		void integrateRK4(float t);
 		std::vector<QmForceRegistry*> getForceRegistries();
+		void computeAccelerations(int index);
+		
 
 		void clear();
 	private:
@@ -34,7 +38,7 @@ namespace Quantum {
 		std::vector<QmBody*> bodies;
 		std::vector<QmForceRegistry*> forceRegistries;
 		glm::vec3 gravityForce;
-		void integrate(float);
+		void integrate(float t);
 	};
 
 }

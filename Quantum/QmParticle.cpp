@@ -31,23 +31,28 @@ void QmParticle::integrate(float t)
 {
 	glm::vec3 resultantAcc = acceleration + forceAccumulator / mass;
 
-	position = position + t * velocity;
-	velocity = velocity + t * resultantAcc;
+	velocity += t * resultantAcc;  // Mise à jour de la vitesse avec l'accélération calculée
+
 	velocity *= damping;
 
-	if (updater != NULL) 
+	// Mise à jour de la position avec la demi-vitesse
+	position += t * (velocity + 0.5f * t * resultantAcc);
+
+	// Calcul de la nouvelle accélération en appelant une mise à jour des forces après avoir changé la position
+ // Appliquer l'amortissement pour limiter la vitesse
+
+	if (updater != NULL)
 	{
 		updater->update(position);
 	}
 
+	// Réinitialiser les accumulateurs de force
 	forceAccumulator = glm::vec3(0.0f);
-
 }
+
 
 void QmParticle::addForce(const glm::vec3& force) {
 	forceAccumulator += force;
-	//std::cout << force.x << ";" << force.y << ";" << force.z << std::endl;
-	//std::cout << "Accumulateur après ajout: " << forceAccumulator.x << ", " << forceAccumulator.y << ", " << forceAccumulator.z << std::endl;
 }
 
 glm::vec3 QmParticle::getAcc()
@@ -68,6 +73,26 @@ float QmParticle::getCharge()
 glm::vec3 QmParticle::getPos()
 {
 	return position;
+}
+
+float QmParticle::getMass() {
+	return mass;
+}
+
+glm::vec3 QmParticle::getNetForce() {
+	return forceAccumulator; 
+}
+
+void QmParticle::setAcc(const glm::vec3& newAcc) {
+	acceleration = newAcc;
+}
+
+void QmParticle::setVel(const glm::vec3& newVel) {
+	velocity = newVel;
+}
+
+void QmParticle::setPos(const glm::vec3& newPos) {
+	position = newPos;
 }
 
 void QmParticle::setUpdater(QmUpdater* updater)

@@ -19,17 +19,9 @@ namespace Quantum {
         float springConstant; // Constante du ressort
 
     public:
-        // Constructeur pour un ressort unique
-        QmSpring(QmParticle* parent, float restLength, float springConstant)
-            : parentParticle(parent), restLength(restLength), springConstant(springConstant) {}
-
         // Constructeur pour un ressort avec des enfants
         QmSpring(QmParticle* parent, std::vector<QmParticle*> children, float restLength, float springConstant)
             : parentParticle(parent), childParticles(children), restLength(restLength), springConstant(springConstant) {}
-
-        void addChild(QmParticle* child) {
-            childParticles.push_back(child);
-        }
 
         virtual void update(QmParticle* p) override {
             if (!p || !parentParticle) {
@@ -43,16 +35,21 @@ namespace Quantum {
                     glm::vec3 d = child->getPos() - parentParticle->getPos();
                     float length = glm::length(d);
                     float coeff = -((length - restLength) * springConstant);
-                    child->addForce(glm::normalize(d) * coeff);
+
+                    glm::vec3 force = glm::normalize(d) * coeff;
+              
+                    child->addForce(force);
                 }
             }
         }
 
-        std::vector<QmParticle*> getAllParticles() {
-            std::vector<QmParticle*> allParticles;
-            allParticles.push_back(parentParticle); // Ajouter la particule mère
-            allParticles.insert(allParticles.end(), childParticles.begin(), childParticles.end()); // Ajouter les enfants
-            return allParticles;
+        std::vector<QmParticle*> getOtherParticles() {
+            return childParticles;
+        }
+
+
+        QmParticle* getParent() {
+            return parentParticle;
         }
     };
 }
