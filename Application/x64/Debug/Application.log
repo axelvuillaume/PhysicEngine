@@ -1,0 +1,8 @@
+﻿  stdafx.cpp
+  Application.cpp
+  GxParticle.cpp
+  GxWorld.cpp
+  GxUpdater.cpp
+  Generating Code...
+LINK : warning LNK4075: ignoring '/INCREMENTAL' due to '/FORCE' specification
+  Application.vcxproj -> H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\x64\Debug\Application.exe

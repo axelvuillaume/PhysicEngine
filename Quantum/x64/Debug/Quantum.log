@@ -1,0 +1,11 @@
+﻿  stdafx.cpp
+  QmBody.cpp
+  QmDrag.h
+  QmForceGenerator.h
+  QmForceRegistry.h
+  QmFixedMagnetism.h
+  QmMagnetism.h
+  QmParticle.cpp
+  QmWorld.cpp
+  Generating Code...
+  Quantum.vcxproj -> H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\x64\Debug\Quantum.lib
