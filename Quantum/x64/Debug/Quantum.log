@@ -1,2 +1,5 @@
-﻿  QmParticle.cpp
-  Quantum.vcxproj -> C:\Users\Axel\Documents\GitHub\PhysicEngine\x64\Debug\Quantum.lib
+﻿  QmWorld.cpp
+H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\Quantum\QmWorld.cpp(322,20): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+  (compiling source file '/QmWorld.cpp')
+  
+  Quantum.vcxproj -> H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\x64\Debug\Quantum.lib

@@ -1,6 +1,3 @@
-// Physics-engine.cpp : définit le point d'entrée pour l'application console.
-//
-
 #include "stdafx.h"
 #include <Windows.h>
 #include <iostream>
@@ -19,6 +16,7 @@
 #include "QmMagnetism.h"
 #include "QmFixedMagnetism.h"
 #include "QmSpring.h"
+#include <random>
 
 using namespace std;
 using namespace Quantum;
@@ -69,13 +67,74 @@ glm::vec3 randomVector(float min, float max)
 
 }
 
+float randomFloat(float min, float max) {
+	float res = min + (max - min)*((rand() % 100) / 100.f); 
+	return res;// Retourne un nombre aléatoire entre min et max
+}
+
+QmParticle* CreateMagnetismParticle(bool isPositive) {
+	glm::vec3 pos = randomVector(-5, 5);
+	float charge = isPositive ? 1.0f : -1.0f;
+	float radius = 0.3f + 0.1f * ((rand() % 100) / 100.f);
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
+	QmParticle* p = new QmParticle(pos, randomVector(0, 0), randomVector(0, 0), 0.5f, charge, radius);
+	p->setUpdater(new GxUpdater(g));
+
+	// Récupération des particules existantes pour QmMagnetism
+	std::vector<QmParticle*> particles;
+	for (QmBody* body : pxWorld.getBodies()) {
+		QmParticle* particle = static_cast<QmParticle*>(body);
+		if (particle) {
+			particles.push_back(particle);
+		}
+	}
+	//std::cout << "Nombre de corps dans le monde: " << pxWorld.getBodies().size() << std::endl;
+
+	// Ajout de la force magnétique à la nouvelle particule
+	QmMagnetism* magnetismForce = new QmMagnetism(10.0f, particles);
+	QmForceRegistry* registryScene = new QmForceRegistry();
+	registryScene->addForceRegistry(p, magnetismForce);
+
+	//std::cout << " p charge " << p->getCharge() << std::endl;
+
+	// Ajout de la particule aux mondes
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	pxWorld.addForceRegistry(registryScene);
+	return p;
+}
+
+
+QmParticle* createParticleRadius()
+{
+	glm::vec3 pos = glm::vec3(randomFloat(-5, 5), randomFloat(-5, 5), 0);
+	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
+	QmParticle* p = new QmParticle(pos, glm::vec3(randomFloat(-2, 2), randomFloat(-2, 2),0), glm::vec3(randomFloat(-2, 2), randomFloat(-2, 2), 0), 0.5f,-1 , radius);
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
+
+QmParticle* createParticle()
+{
+	glm::vec3 pos = randomVector(-5, 5);
+	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
+	QmParticle* p = new QmParticle(pos, glm::vec3(0, 0, 0), randomVector(0, 0));
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
 
 
 
 QmParticle* createFountainParticle(glm::vec3 pos)
 {
-	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
-	QmParticle* p = new QmParticle(pos, randomVector(-2, 2), randomVector(0, 0));
+	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
+	QmParticle* p = new QmParticle(pos, randomVector(-2, 2), randomVector(0, 0),radius = radius);
 	p->setUpdater(new GxUpdater(g));
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
@@ -102,18 +161,6 @@ QmParticle* createParticleForce(QmForceRegistry* registryScene)
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
 	pxWorld.addForceRegistry(registryScene);
-	return p;
-}
-
-
-QmParticle* createParticle()
-{
-	glm::vec3 pos = randomVector(-5, 5);
-	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
-	QmParticle* p = new QmParticle(pos, glm::vec3(0,0,0), randomVector(0, 0));
-	p->setUpdater(new GxUpdater(g));
-	gxWorld.addParticle(g);
-	pxWorld.addBody(p);
 	return p;
 }
 
@@ -146,36 +193,6 @@ QmParticle* CreateDragParticle2()
 
 }
 
-QmParticle* CreateMagnetismParticle(bool isPositive) {
-	glm::vec3 pos = randomVector(-5, 5);
-	float charge = isPositive ? 1.0f : -1.0f;
-	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
-	QmParticle* p = new QmParticle(pos, randomVector(0, 0), randomVector(0, 0),0.5f, charge);
-	p->setUpdater(new GxUpdater(g));
-
-	// Récupération des particules existantes pour QmMagnetism
-	std::vector<QmParticle*> particles;
-	for (QmBody* body : pxWorld.getBodies()) {
-		QmParticle* particle = static_cast<QmParticle*>(body);
-		if (particle) {
-			particles.push_back(particle);
-		}
-	}
-	//std::cout << "Nombre de corps dans le monde: " << pxWorld.getBodies().size() << std::endl;
-
-	// Ajout de la force magnétique à la nouvelle particule
-	QmMagnetism* magnetismForce = new QmMagnetism(10.0f, particles);
-	QmForceRegistry* registryScene = new QmForceRegistry();
-	registryScene->addForceRegistry(p, magnetismForce);
-
-	//std::cout << " p charge " << p->getCharge() << std::endl;
-
-	// Ajout de la particule aux mondes
-	gxWorld.addParticle(g);
-	pxWorld.addBody(p);
-	pxWorld.addForceRegistry(registryScene);
-	return p;
-}
 
 QmParticle* CreateFixedMagnetismParticle(glm::vec3 fixedPos, float fixedCharge)
 {
@@ -337,6 +354,45 @@ void idleFunc()
 }
 
 
+void drawHalfSpace(QmHalfSpace* halfSpace) {
+	// Taille du carré (exemple)
+	float size = 100.0f;
+
+	// Normal du demi-espace
+	glm::vec3 normal = halfSpace->normal;
+
+	// Point sur le plan en utilisant l'offset
+	glm::vec3 center = normal * halfSpace->offset;
+
+	// Trouver deux vecteurs perpendiculaires à la normale pour former le plan
+	glm::vec3 up = glm::vec3(0, 1, 0);
+	if (glm::dot(normal, up) > 0.99f) {
+		up = glm::vec3(1, 0, 0); // Si la normale est alignée avec l'axe Y, utiliser l'axe X
+	}
+	glm::vec3 tangent = glm::normalize(glm::cross(normal, up));
+	glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
+
+	// Calculer les quatre coins du carré
+	glm::vec3 p1 = center + (tangent * size / 2.0f) + (bitangent * size / 2.0f);
+	glm::vec3 p2 = center - (tangent * size / 2.0f) + (bitangent * size / 2.0f);
+	glm::vec3 p3 = center - (tangent * size / 2.0f) - (bitangent * size / 2.0f);
+	glm::vec3 p4 = center + (tangent * size / 2.0f) - (bitangent * size / 2.0f);
+
+	glDisable(GL_DEPTH_TEST);
+
+	// Dessiner un carré avec glBegin/glEnd
+	glBegin(GL_QUADS); // Dessiner un carré
+	glColor3f(0.5f, 0.5f, 0.5f); // Couleur grise pour le sol
+	glVertex3f(p1.x, p1.y, p1.z);
+	glVertex3f(p2.x, p2.y, p2.z);
+	glVertex3f(p3.x, p3.y, p3.z);
+	glVertex3f(p4.x, p4.y, p4.z);
+	glEnd();
+
+	// Réactiver la profondeur après avoir dessiné le sol
+	glEnable(GL_DEPTH_TEST);
+}
+
 
 
 
@@ -346,10 +402,23 @@ void initScene1()
 {
 	printf("Scene 1: Random particles.\n");
 	printf("Type space to pause.\n");
+
+	glm::vec3 normal = glm::vec3(0, 1, 0); // Normale pointant vers le haut
+	float offset = -10.0f; // Distance à laquelle le sol sera placé (en fonction de votre échelle de scène)
+
+	QmHalfSpace* ground = new QmHalfSpace(normal, offset);
+	pxWorld.addBody(ground); // Ajoutez le sol au monde de la physique
+
+	drawHalfSpace(ground);
+
+
 	mousePointer = new glm::vec3(0, 4.5, 0);
-	for (int i = 0; i < 100; i++)
-		createParticle();
+	for (int i = 0; i < 20; i++)
+		createParticleRadius();
+
+	
 }
+
 
 void initScene2()
 {

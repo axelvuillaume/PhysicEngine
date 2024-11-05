@@ -5,6 +5,7 @@
 #include "QmParticle.h"
 #include "QmForceRegistry.h"
 
+
 using namespace Quantum;
 
 QmWorld::QmWorld() : gravityForce(0.0f, -9.81f, 0.0f), gravityEnabled(true), time(0.f), ticktime(0.f)
@@ -27,13 +28,232 @@ float QmWorld::tick(float t)
     }
     updateForces(t);
     integrate(t);
+	resolve(narrowphase(broadphase()));
+
     
     ticktime += t; // Met à jour le temps du dernier tick
     return time - ticktime; // Retourne le temps restant
 }
 
+bool sphereHalfSpaceIntersect(QmParticle* particle, QmHalfSpace* halfSpace) {
+	glm::vec3 particlePos = particle->getPos();
+	float radius = particle->getRadius();
+
+	// Distance du centre de la sphère au plan
+	float distanceToPlane = glm::dot(halfSpace->normal, particlePos) - halfSpace->offset;
+
+	// Vérifiez si la sphère touche le demi-espace
+	return distanceToPlane < radius;
+}
 
 
+bool intersect(QmAABB a, QmAABB b) {
+	return
+		(a.min.x <= b.max.x && a.max.x >= b.min.x) &&
+		(a.min.y <= b.max.y && a.max.y >= b.min.y) &&
+		(a.min.z <= b.max.z && a.max.z >= b.min.z);
+}
+
+std::vector<QmContact> QmWorld::broadphase() {
+	std::vector<QmContact> potentialContacts;
+
+	for (size_t i = 0; i < bodies.size(); ++i) {
+		for (size_t j = i + 1; j < bodies.size(); ++j) {
+			QmBody* body1 = bodies[i];
+			QmBody* body2 = bodies[j];
+
+			// Vérifiez si les deux corps sont des QmParticles
+			QmParticle* particle1 = dynamic_cast<QmParticle*>(body1);
+			QmParticle* particle2 = dynamic_cast<QmParticle*>(body2);
+			QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(body2); // On peut aussi vérifier si body2 est un demi-espace
+
+			// Collision entre deux sphères
+			if (particle1 && particle2) {
+				QmAABB aabb1 = particle1->getAABB();
+				QmAABB aabb2 = particle2->getAABB();
+
+				if (intersect(aabb1, aabb2)) {
+					glm::vec3 contactNormal = glm::normalize(particle2->getPos() - particle1->getPos());
+					float penetrationDepth = 0.0f;
+					potentialContacts.push_back(QmContact(particle1, particle2, contactNormal, penetrationDepth));
+				}
+			}
+
+			// Collision entre une sphère et un demi-espace
+			if (particle1 && halfSpace) {
+				// On peut simplifier la détection de collision pour un demi-espace.
+				float distanceFromPlane = glm::dot(particle1->getPos(), halfSpace->normal) - halfSpace->offset;
+
+				// Si la particule est en dessous du plan
+				if (sphereHalfSpaceIntersect(particle1, halfSpace)) {
+					glm::vec3 contactNormal = halfSpace->normal;
+					float penetrationDepth = particle1->getRadius() - distanceFromPlane;
+					std::cout << potentialContacts.size() << std::endl;
+					potentialContacts.push_back(QmContact(particle1, halfSpace, contactNormal, penetrationDepth));
+				}
+			}
+		}
+	}
+
+	return potentialContacts;
+}
+
+std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts) {
+	std::vector<QmContact> refinedContacts;
+
+	// Parcourir tous les contacts détectés dans la broadphase
+	for (QmContact& contact : contacts) {
+		QmParticle* particle1 = dynamic_cast<QmParticle*>(contact.body1);
+		QmParticle* particle2 = dynamic_cast<QmParticle*>(contact.body2);
+		QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(contact.body2);
+
+		if (particle1 && particle2) {
+			// Récupérer les positions et les rayons des particules
+			glm::vec3 pos1 = particle1->getPos();
+			glm::vec3 pos2 = particle2->getPos();
+			float radius1 = particle1->getRadius();
+			float radius2 = particle2->getRadius();
+
+			glm::vec3 delta = pos2 - pos1;
+			float distSq = glm::dot(delta, delta); 
+
+			float radiusSum = radius1 + radius2;
+			float radiusSumSq = radiusSum * radiusSum;  
+
+			// Vérifier si les particules se chevauchent réellement (distance < somme des rayons)
+			if (distSq < radiusSumSq) {
+				// Calculer la profondeur de pénétration et la normale
+				float dist = glm::sqrt(distSq);
+				glm::vec3 contactNormal = glm::normalize(delta);
+
+				// Si la distance est proche de zéro, éviter la division par zéro
+				if (dist < 0.0001f) {
+					contactNormal = glm::vec3(1.0f, 0.0f, 0.0f); 
+				}
+
+				float penetrationDepth = radiusSum - dist;
+
+				// Mettre à jour les informations de contact
+				contact.normal = contactNormal;
+				contact.depth = penetrationDepth;
+
+				// Ajouter le contact raffiné à la liste des contacts
+				refinedContacts.push_back(contact);
+			}
+		}
+
+		if (particle1 && halfSpace) {
+			// Gérer la collision sphère-demi-espace
+			glm::vec3 particlePos = particle1->getPos();
+			float radius = particle1->getRadius();
+
+			// Calculer la distance entre la sphère et le plan du demi-espace
+			float distanceFromPlane = glm::dot(particlePos, halfSpace->normal) - halfSpace->offset;
+
+			// Vérifier si la sphère pénètre dans le demi-espace
+			if (distanceFromPlane < radius) {
+				float penetrationDepth = radius - distanceFromPlane;
+
+				// Mettre à jour les informations de contact
+				contact.normal = halfSpace->normal;
+				contact.depth = penetrationDepth;
+
+				// Ajouter le contact raffiné
+				std::cout << refinedContacts.size() << std::endl;
+				refinedContacts.push_back(contact);
+			}
+		}
+	}
+
+
+	return refinedContacts;
+	
+}
+
+void QmWorld::resolve(std::vector<QmContact> contacts) {
+	for (QmContact& contact : contacts) {
+		// Extraire les deux corps impliqués dans la collision
+		QmParticle* particle1 = dynamic_cast<QmParticle*>(contact.body1);
+		QmParticle* particle2 = dynamic_cast<QmParticle*>(contact.body2);
+		QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(contact.body2);
+
+		if (particle1 && particle2) {
+			// 1. Déplacer les objets hors de l'interpénétration
+			float mass1 = particle1->getMass();
+			float mass2 = particle2->getMass();
+			float totalMass = mass1 + mass2;
+
+			if (totalMass == 0) continue;
+
+			// Normaliser la normale de contact
+			glm::vec3 normal = glm::normalize(contact.normal);
+
+			// Calculer le déplacement proportionnel à la masse
+			glm::vec3 movePerMass1 = glm::vec3(contact.depth * mass2/ totalMass);
+			glm::vec3 movePerMass2 = glm::vec3(contact.depth * mass1 / totalMass);
+
+			// Mettre à jour les positions des particules
+			particle1->setPos(particle1->getPos() + movePerMass1);
+			particle2->setPos(particle2->getPos() - movePerMass2);
+
+
+
+
+			// 2. Calculer les nouvelles vitesses après la collision
+			glm::vec3 velocity1 = particle1->getVel();
+			glm::vec3 velocity2 = particle2->getVel();
+
+			glm::vec3 relativeVelocity = velocity2 - velocity1;
+			float velocityAlongNormal = glm::dot(relativeVelocity, normal);
+
+			// Si les particules s'éloignent, ne rien faire
+			if (velocityAlongNormal > 0) {
+				continue;
+			}
+
+			float restitution = 1.0f;
+
+			float impulseScalar = -(1 + restitution) * velocityAlongNormal / (1 / mass1 + 1 / mass2);
+			glm::vec3 impulse = impulseScalar * normal;
+
+			// Mettre à jour les vitesses des particules
+			particle1->setVel(velocity1 - impulse / mass1);
+			particle2->setVel(velocity2 + impulse / mass2);
+
+	
+		}
+
+		if (particle1 && halfSpace) {
+			// 1. Résolution des collisions entre une particule et un demi-espace
+
+			float mass1 = particle1->getMass();
+			if (mass1 == 0) continue; // Ignorer les particules sans masse
+
+			glm::vec3 normal = glm::normalize(contact.normal);
+
+			// Déplacer la particule hors du demi-espace
+			glm::vec3 move = normal * contact.depth;
+			particle1->setPos(particle1->getPos() + move);
+
+			// 2. Calcul des nouvelles vitesses après la collision
+			glm::vec3 velocity1 = particle1->getVel();
+
+			float velocityAlongNormal = glm::dot(velocity1, normal);
+
+			if (velocityAlongNormal > 0) continue;
+
+			float restitution = 1.0f;
+
+			float impulseScalar = -(1 + restitution) * velocityAlongNormal / (1 / mass1);
+			glm::vec3 impulse = impulseScalar * normal;
+
+			// Mettre à jour la vitesse de la particule
+			particle1->setVel(velocity1 - impulse / mass1);
+		}
+
+	}
+
+}
 
 // Ajout de la méthode interpolate
 void QmWorld::interpolate(float dt)

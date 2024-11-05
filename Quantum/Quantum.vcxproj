@@ -142,7 +142,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="QmAABB.h" />
     <ClInclude Include="QmBody.h" />
+    <ClInclude Include="QmContact.h" />
+    <ClInclude Include="QmHalfSpace.h" />
     <ClInclude Include="QmSpring.h" />
     <ClInclude Include="QmUpdater.h" />
     <ClInclude Include="QmParticle.h" />

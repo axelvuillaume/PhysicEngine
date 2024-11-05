@@ -1,24 +1,26 @@
 #include "stdafx.h"
-
 #include <iostream>
 #include "QmParticle.h"
 #include "QmUpdater.h"
 
+
 using namespace Quantum;
 
-QmParticle::QmParticle() : position(0, 0, 0), velocity(0, 0, 0), acceleration(0, 0, 0), forceAccumulator(0, 0, 0), mass(0.5f), charge(0.0f), isAffectedByGravity(true)
+QmParticle::QmParticle() : position(0, 0, 0), velocity(0, 0, 0), acceleration(0, 0, 0), forceAccumulator(0, 0, 0), mass(5.0f), charge(0.0f), isAffectedByGravity(true), restitution(0.5f)
 {
 }
 
-QmParticle::QmParticle(glm::vec3 pos, glm::vec3 vel, glm::vec3 acc, float mass, float charge) : QmParticle()
+QmParticle::QmParticle(glm::vec3 pos, glm::vec3 vel, glm::vec3 acc, float mass, float charge, float radius, float restitution) : QmParticle()
 {
 	position = pos;
 	velocity = vel;
 	acceleration = acc;
 	this->mass = mass;
-	damping = 0.990f;
+	damping = 0.995f;
 	type = TYPE_PARTICLE;
 	this->charge = charge;
+	this->radius = radius;
+	this->restitution = restitution;
 }
 
 QmParticle::~QmParticle()
@@ -31,22 +33,13 @@ void QmParticle::integrate(float t)
 {
 	glm::vec3 resultantAcc = acceleration + forceAccumulator / mass;
 
-	velocity += t * resultantAcc;  // Mise à jour de la vitesse avec l'accélération calculée
-
+	velocity += t * resultantAcc;  
 	velocity *= damping;
-
-	// Mise à jour de la position avec la demi-vitesse
 	position += t * (velocity + 0.5f * t * resultantAcc);
-
-	// Calcul de la nouvelle accélération en appelant une mise à jour des forces après avoir changé la position
- // Appliquer l'amortissement pour limiter la vitesse
-
 	if (updater != NULL)
 	{
 		updater->update(position);
 	}
-
-	// Réinitialiser les accumulateurs de force
 	forceAccumulator = glm::vec3(0.0f);
 }
 
@@ -79,6 +72,11 @@ float QmParticle::getMass() {
 	return mass;
 }
 
+float QmParticle::getRadius() {
+	return radius;
+}
+
+
 glm::vec3 QmParticle::getNetForce() {
 	return forceAccumulator; 
 }
@@ -104,5 +102,13 @@ void QmParticle::reset() {
 	acceleration = glm::vec3(0.0f, 0.0f, 0.0f);
 	forceAccumulator = glm::vec3(0.0f, 0.0f, 0.0f);
 }
+
+
+QmAABB QmParticle::getAABB() {
+	glm::vec3 radiusVec(radius, radius,radius);
+	return QmAABB(position - radiusVec, position + radiusVec);
+}
+
+
 
 

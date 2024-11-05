@@ -4,7 +4,8 @@
 #include <list>
 #include <vector>
 #include "QmForceRegistry.h"
-
+#include "QmContact.h"
+#include "QmHalfSpace.h"
 namespace Quantum {
 
 	class QmBody;
@@ -28,7 +29,9 @@ namespace Quantum {
 		void integrateRK4(float t);
 		std::vector<QmForceRegistry*> getForceRegistries();
 		void computeAccelerations(int index);
-		
+		std::vector<QmContact> broadphase();
+		std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts);
+		void resolve(std::vector<QmContact> contacts);
 
 		void clear();
 	private:
