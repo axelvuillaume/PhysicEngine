@@ -46,6 +46,11 @@ float camHeight = 0.f;
 float mx = 0.f;
 float my = 0.f;
 float fixedCharge = 1.0f;
+float particleSpawnTimer = 0.0f;
+const float particleSpawnInterval = 0.05f;
+QmParticle* cursorControlledParticle = nullptr;
+
+std::vector<QmHalfSpace*> halfSpaces;
 
 // Variables du calcul de framerate 
 int timeold = 0;
@@ -54,6 +59,7 @@ float accTime = 0.0;
 bool paused = false;
 
 GLfloat light_pos[] = { 0.0, 6.0, 1.0, 1.0 };
+QmFixedMagnetism* sharedFixedMagnetism = nullptr;
 
 // ********************************************
 
@@ -134,7 +140,7 @@ QmParticle* createFountainParticle(glm::vec3 pos)
 {
 	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
 	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
-	QmParticle* p = new QmParticle(pos, randomVector(-2, 2), randomVector(0, 0),radius = radius);
+	QmParticle* p = new QmParticle(pos, randomVector(9.0f, 10.0f), randomVector(-1, 1),radius = radius);
 	p->setUpdater(new GxUpdater(g));
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
@@ -168,7 +174,7 @@ QmParticle* createParticleNoGravity()
 {
 	glm::vec3 pos = randomVector(-5, 5);
 	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
-	QmParticle* p = new QmParticle(pos, glm::vec3(0, 0, 0), randomVector(0, 0));
+	QmParticle* p = new QmParticle(pos, glm::vec3(0, 0, 0), randomVector(0, 0), 0.5f, -1.0f, 0.0f);
 	p->setUpdater(new GxUpdater(g));
 	p->isAffectedByGravity = false;
 	gxWorld.addParticle(g);
@@ -197,25 +203,25 @@ QmParticle* CreateDragParticle2()
 QmParticle* CreateFixedMagnetismParticle(glm::vec3 fixedPos, float fixedCharge)
 {
 	glm::vec3 pos = randomVector(-5, 5);
-	float charge = (std::rand() % 2 == 0) ? 1.0f : -1.0f; 
+	float charge = (std::rand() % 2 == 0) ? 1.0f : -1.0f;
 	GxParticle* g = new GxParticle(randomVector(1, 0), 0.1f + 0.2f * ((rand() % 100) / 100.f), pos);
 	QmParticle* p = new QmParticle(pos, randomVector(0, 0), randomVector(0, 0), 0.5f, charge);
 	p->setUpdater(new GxUpdater(g));
 
-	// Création de la force magnétique fixe
-	QmFixedMagnetism* fixedMagnetismForce = new QmFixedMagnetism(10.0f, fixedPos, fixedCharge);
-	QmForceRegistry* registryScene = new QmForceRegistry();
-	registryScene->addForceRegistry(p, fixedMagnetismForce);
+	// Ajoute la même force de magnétisme fixe pour chaque particule
+	if (sharedFixedMagnetism) {
+		QmForceRegistry* registryScene = new QmForceRegistry();
+		registryScene->addForceRegistry(p, sharedFixedMagnetism);
+		pxWorld.addForceRegistry(registryScene);
+	}
 
 	std::cout << " p charge " << p->getCharge() << std::endl;
 
 	// Ajout de la particule aux mondes
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
-	pxWorld.addForceRegistry(registryScene);
 	return p;
 }
-
 
 
 
@@ -314,7 +320,12 @@ void calculateFPS(float dt)
 
 void updateScene2(float deltaTime)
 {
-	createFountainParticle(*mousePointer);
+	particleSpawnTimer += deltaTime;
+
+	if (particleSpawnTimer >= particleSpawnInterval) {
+		createFountainParticle(*mousePointer);
+		particleSpawnTimer = 0.0f; 
+	}
 }
 
 void idleFunc()
@@ -335,16 +346,24 @@ void idleFunc()
 	}
 
 	if (scene == 6) {
-		QmFixedMagnetism fixedMagnetism(10.0f, *mousePointer, fixedCharge);
-
-		for (QmBody* body : pxWorld.getBodies()) {
-			QmParticle* particle = static_cast<QmParticle*>(body);
-			if (particle) {
-				fixedMagnetism.update(particle);
-			}
+		if (sharedFixedMagnetism) {
+			// Met à jour la position de la source de magnétisme avec celle du curseur
+			sharedFixedMagnetism->setPosition(*mousePointer);
 		}
 
-	}	
+		// Mets à jour les forces dans QmForceRegistry
+		pxWorld.updateForces(dt);
+	}
+
+	if (scene == 7) {
+		// Mettre à jour la position de `cursorControlledParticle` pour qu'elle suive le curseur
+		if (cursorControlledParticle) {
+				cursorControlledParticle->setPos(*mousePointer);
+		}
+
+			// Mise à jour des forces dans QmForceRegistry
+		pxWorld.updateForces(dt);
+	}
 
 	calculateFPS(dt);
 	if (!paused) pxWorld.simulate(dt);
@@ -354,46 +373,47 @@ void idleFunc()
 }
 
 
-void drawHalfSpace(QmHalfSpace* halfSpace) {
-	// Taille du carré (exemple)
-	float size = 100.0f;
+    void drawHalfSpace(const QmHalfSpace* halfSpace) {
+        if (!halfSpace) return; // Vérifier que l'objet n'est pas nul
 
-	// Normal du demi-espace
-	glm::vec3 normal = halfSpace->normal;
+        // Normaliser la normale
+        glm::vec3 up = glm::normalize(halfSpace->normal);
+        glm::vec3 right;
+        glm::vec3 forward;
 
-	// Point sur le plan en utilisant l'offset
-	glm::vec3 center = normal * halfSpace->offset;
+        // Déterminer les directions basées sur la normale
+        if (up.y == 1.0f || up.y == -1.0f) { // Sol ou plafond
+            right = glm::normalize(glm::cross(up, glm::vec3(1.0f, 0.0f, 0.0f)));
+            forward = glm::normalize(glm::cross(up, right));
+        } else { // Murs (normales horizontales)
+            right = glm::normalize(glm::cross(up, glm::vec3(0.0f, 1.0f, 0.0f)));
+            forward = glm::normalize(glm::cross(up, right));
+        }
 
-	// Trouver deux vecteurs perpendiculaires à la normale pour former le plan
-	glm::vec3 up = glm::vec3(0, 1, 0);
-	if (glm::dot(normal, up) > 0.99f) {
-		up = glm::vec3(1, 0, 0); // Si la normale est alignée avec l'axe Y, utiliser l'axe X
+        // Déterminer les coins du plan
+        glm::vec3 corner1 = halfSpace->offset * up - 50.0f * right - 50.0f * forward; // Coin inférieur gauche
+        glm::vec3 corner2 = halfSpace->offset * up + 50.0f * right - 50.0f * forward; // Coin inférieur droit
+        glm::vec3 corner3 = halfSpace->offset * up + 50.0f * right + 50.0f * forward; // Coin supérieur droit
+        glm::vec3 corner4 = halfSpace->offset * up - 50.0f * right + 50.0f * forward; // Coin supérieur gauche
+
+        // Couleur (facultatif)
+		glColor3f(0.8f, 0.4f, 0.3f); // Couleur gris pour le sol
+
+        // Définir les coins du quadrilatère
+        glBegin(GL_QUADS);
+        glVertex3f(corner1.x, corner1.y, corner1.z);
+        glVertex3f(corner2.x, corner2.y, corner2.z);
+        glVertex3f(corner3.x, corner3.y, corner3.z);
+        glVertex3f(corner4.x, corner4.y, corner4.z);
+        glEnd(); // Terminer le dessin
+    }
+
+
+void drawHalfSpaces(const std::vector<QmHalfSpace*>& halfSpaces) {
+	for (const auto& halfSpace : halfSpaces) {
+		drawHalfSpace(halfSpace); // Appeler la fonction pour chaque QmHalfSpace
 	}
-	glm::vec3 tangent = glm::normalize(glm::cross(normal, up));
-	glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
-
-	// Calculer les quatre coins du carré
-	glm::vec3 p1 = center + (tangent * size / 2.0f) + (bitangent * size / 2.0f);
-	glm::vec3 p2 = center - (tangent * size / 2.0f) + (bitangent * size / 2.0f);
-	glm::vec3 p3 = center - (tangent * size / 2.0f) - (bitangent * size / 2.0f);
-	glm::vec3 p4 = center + (tangent * size / 2.0f) - (bitangent * size / 2.0f);
-
-	glDisable(GL_DEPTH_TEST);
-
-	// Dessiner un carré avec glBegin/glEnd
-	glBegin(GL_QUADS); // Dessiner un carré
-	glColor3f(0.5f, 0.5f, 0.5f); // Couleur grise pour le sol
-	glVertex3f(p1.x, p1.y, p1.z);
-	glVertex3f(p2.x, p2.y, p2.z);
-	glVertex3f(p3.x, p3.y, p3.z);
-	glVertex3f(p4.x, p4.y, p4.z);
-	glEnd();
-
-	// Réactiver la profondeur après avoir dessiné le sol
-	glEnable(GL_DEPTH_TEST);
 }
-
-
 
 
 // INIT SCENE
@@ -403,20 +423,25 @@ void initScene1()
 	printf("Scene 1: Random particles.\n");
 	printf("Type space to pause.\n");
 
-	glm::vec3 normal = glm::vec3(0, 1, 0); // Normale pointant vers le haut
-	float offset = -10.0f; // Distance à laquelle le sol sera placé (en fonction de votre échelle de scène)
-
-	QmHalfSpace* ground = new QmHalfSpace(normal, offset);
-	pxWorld.addBody(ground); // Ajoutez le sol au monde de la physique
-
-	drawHalfSpace(ground);
-
-
-	mousePointer = new glm::vec3(0, 4.5, 0);
 	for (int i = 0; i < 20; i++)
 		createParticleRadius();
 
+
+
+	halfSpaces.push_back(new QmHalfSpace(glm::vec3(0, 1, 0), -10.0f)); // Sol
+	halfSpaces.push_back(new QmHalfSpace(glm::vec3(0, -1, 0), -10.0f)); // Plafond
+	halfSpaces.push_back(new QmHalfSpace(glm::vec3(1, 0, 0), -10.0f));  // Mur droit
+	halfSpaces.push_back(new QmHalfSpace(glm::vec3(-1, 0, 0), -10.0f)); // Mur gauche
+
+	// Dessiner tous les halfSpaces
+	drawHalfSpaces(halfSpaces);
+
+	for (const auto& halfSpace : halfSpaces) {
+		pxWorld.addBody(halfSpace);
+	}
 	
+
+
 }
 
 
@@ -471,24 +496,28 @@ void initScene5()
 
 void initScene6()
 {
-	printf("Scene 6. Qm magnestism Fixed\n");
+	printf("Scene 6. Qm magnetism Fixed\n");
 	mousePointer = new glm::vec3(0, 4.5, 0);
 
+	// Initialise la force de magnétisme avec la position du curseur
+	sharedFixedMagnetism = new QmFixedMagnetism(1.0f, *mousePointer, fixedCharge);
 	createFixedMagnScene(*mousePointer);
 }
 
 void initScene7()
 {
 	printf("Scene 7. Qm Spring\n");
+	mousePointer = new glm::vec3(0, 4.5, 0);
 
 	float restLength = 2.0f;
-	float springConstant = 210.0f;
+	float springConstant = 3.0f;
 
 
 	QmForceRegistry* registry = new QmForceRegistry();
 
 	QmParticle* parentParticle = createParticleNoGravity();
 
+	cursorControlledParticle = parentParticle;
 
 	std::vector<QmParticle*> childParticles;
 	int numParticles = 12; 
@@ -623,12 +652,12 @@ void drawFunc()
 
 	drawSprings();
 
+	drawHalfSpaces(halfSpaces);
 
 
 
 	glutSwapBuffers();
 }
-
 
 
 void mouseFunc(int button, int state, int x, int y)
@@ -695,11 +724,13 @@ void toggleScene(int s)
 
 void keyFunc(unsigned char key, int x, int y)
 {
+
 	switch (key)
 	{
 	case 'q': case 'Q': case 27:
 		clearWorld();
 		glDeleteLists(DrawListSphere, 1);
+
 		exit(0);
 		break;
 	case '1':
@@ -792,38 +823,3 @@ int main(int argc, char** argv)
 
 
 
-/*
-// Créer la particule mère
-QmParticle* parentParticle = createParticleNoGravity();
-
-std::vector<QmParticle*> childParticles;
-
-for (int i = 0; i < 3; ++i) {
-	childParticles.push_back(createParticle());
-}
-
-QmSpring* springForce = new QmSpring(parentParticle, childParticles, restLength, springConstant);
-
-for (QmParticle* child : childParticles) {
-	registry->addForceRegistry(child, springForce);
-}
-
-for (int i = 0; i < childParticles.size(); ++i) {
-	std::vector<QmParticle*> otherParticles;
-
-	for (int j = 0; j < childParticles.size(); ++j) {
-		if (i != j) {
-			otherParticles.push_back(childParticles[j]);
-		}
-	}
-
-	// Créer un ressort pour la particule i en tant que parent
-	QmSpring* springForce = new QmSpring(childParticles[i], otherParticles, restLength, springConstant);
-
-	// Ajouter la force pour chaque enfant
-	for (QmParticle* child : otherParticles) {
-		registry->addForceRegistry(child, springForce);
-	}
-}
-
-*/

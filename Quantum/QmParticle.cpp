@@ -16,7 +16,7 @@ QmParticle::QmParticle(glm::vec3 pos, glm::vec3 vel, glm::vec3 acc, float mass, 
 	velocity = vel;
 	acceleration = acc;
 	this->mass = mass;
-	damping = 0.995f;
+	damping = 0.990f;
 	type = TYPE_PARTICLE;
 	this->charge = charge;
 	this->radius = radius;

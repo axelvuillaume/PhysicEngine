@@ -1,5 +1,5 @@
 ﻿  QmWorld.cpp
-H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\Quantum\QmWorld.cpp(322,20): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-  (compiling source file '/QmWorld.cpp')
+C:\Users\Axel\Documents\GitHub\PhysicEngine\Quantum\QmWorld.cpp(338,20): warning C4244: 'argument' : conversion de 'int' en 'float', perte possible de données
+  (compiler le fichier source '/QmWorld.cpp')
   
-  Quantum.vcxproj -> H:\Documents\Le coding\C++\PhysicEngine\QuantumStarterKit\x64\Debug\Quantum.lib
+  Quantum.vcxproj -> C:\Users\Axel\Documents\GitHub\PhysicEngine\x64\Debug\Quantum.lib

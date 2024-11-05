@@ -54,42 +54,57 @@ bool intersect(QmAABB a, QmAABB b) {
 		(a.min.z <= b.max.z && a.max.z >= b.min.z);
 }
 
+
+
 std::vector<QmContact> QmWorld::broadphase() {
 	std::vector<QmContact> potentialContacts;
 
-	for (size_t i = 0; i < bodies.size(); ++i) {
-		for (size_t j = i + 1; j < bodies.size(); ++j) {
-			QmBody* body1 = bodies[i];
-			QmBody* body2 = bodies[j];
+	// Separate dynamic and static bodies
+	std::vector<QmBody*> staticBodies;
+	std::vector<QmBody*> dynamicBodies;
 
-			// Vérifiez si les deux corps sont des QmParticles
-			QmParticle* particle1 = dynamic_cast<QmParticle*>(body1);
-			QmParticle* particle2 = dynamic_cast<QmParticle*>(body2);
-			QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(body2); // On peut aussi vérifier si body2 est un demi-espace
+	for (QmBody* body : bodies) {
+		if (dynamic_cast<QmHalfSpace*>(body)) {
+			staticBodies.push_back(body);
+		}
+		else {
+			dynamicBodies.push_back(body);
+		}
+	}
 
-			// Collision entre deux sphères
+	// Check collisions between dynamic bodies
+	for (size_t i = 0; i < dynamicBodies.size(); ++i) {
+		for (size_t j = i + 1; j < dynamicBodies.size(); ++j) {
+			QmParticle* particle1 = dynamic_cast<QmParticle*>(dynamicBodies[i]);
+			QmParticle* particle2 = dynamic_cast<QmParticle*>(dynamicBodies[j]);
+
 			if (particle1 && particle2) {
 				QmAABB aabb1 = particle1->getAABB();
 				QmAABB aabb2 = particle2->getAABB();
 
 				if (intersect(aabb1, aabb2)) {
 					glm::vec3 contactNormal = glm::normalize(particle2->getPos() - particle1->getPos());
-					float penetrationDepth = 0.0f;
+					float penetrationDepth = 0.0f; // Calculate based on actual intersection depth
 					potentialContacts.push_back(QmContact(particle1, particle2, contactNormal, penetrationDepth));
 				}
 			}
+		}
+	}
 
-			// Collision entre une sphère et un demi-espace
-			if (particle1 && halfSpace) {
-				// On peut simplifier la détection de collision pour un demi-espace.
-				float distanceFromPlane = glm::dot(particle1->getPos(), halfSpace->normal) - halfSpace->offset;
+	// Check collisions between dynamic bodies and static bodies (half spaces)
+	for (QmBody* dynamicBody : dynamicBodies) {
+		QmParticle* particle = dynamic_cast<QmParticle*>(dynamicBody);
+		for (QmBody* staticBody : staticBodies) {
+			QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(staticBody);
 
-				// Si la particule est en dessous du plan
-				if (sphereHalfSpaceIntersect(particle1, halfSpace)) {
+			if (particle && halfSpace) {
+				float distanceFromPlane = glm::dot(particle->getPos(), halfSpace->normal) - halfSpace->offset;
+
+				// Check if the particle is below the plane
+				if (sphereHalfSpaceIntersect(particle, halfSpace)) {
 					glm::vec3 contactNormal = halfSpace->normal;
-					float penetrationDepth = particle1->getRadius() - distanceFromPlane;
-					std::cout << potentialContacts.size() << std::endl;
-					potentialContacts.push_back(QmContact(particle1, halfSpace, contactNormal, penetrationDepth));
+					float penetrationDepth = particle->getRadius() - distanceFromPlane; // Calculate penetration
+					potentialContacts.push_back(QmContact(particle, halfSpace, contactNormal, penetrationDepth));
 				}
 			}
 		}
@@ -159,7 +174,6 @@ std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts) {
 				contact.depth = penetrationDepth;
 
 				// Ajouter le contact raffiné
-				std::cout << refinedContacts.size() << std::endl;
 				refinedContacts.push_back(contact);
 			}
 		}
@@ -237,18 +251,20 @@ void QmWorld::resolve(std::vector<QmContact> contacts) {
 
 			// 2. Calcul des nouvelles vitesses après la collision
 			glm::vec3 velocity1 = particle1->getVel();
-
 			float velocityAlongNormal = glm::dot(velocity1, normal);
 
-			if (velocityAlongNormal > 0) continue;
+			// Vérifie si la vitesse le long de la normale est négative (entrée dans le demi-espace)
+			if (velocityAlongNormal > 0) continue; // La particule se déplace vers l'extérieur
 
+			// Coefficient de restitution pour le rebond
 			float restitution = 1.0f;
 
+			// Calcule l'impulsion
 			float impulseScalar = -(1 + restitution) * velocityAlongNormal / (1 / mass1);
 			glm::vec3 impulse = impulseScalar * normal;
 
-			// Mettre à jour la vitesse de la particule
-			particle1->setVel(velocity1 - impulse / mass1);
+			// Met à jour la vitesse de la particule
+			particle1->setVel(velocity1 + impulse / mass1); // Ajoute l'impulsion pour inverser la vitesse
 		}
 
 	}
