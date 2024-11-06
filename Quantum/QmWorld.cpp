@@ -19,21 +19,7 @@ QmWorld::~QmWorld()
 }
 
 
-// Ajout de la méthode tick
-float QmWorld::tick(float t)
-{
-	//resetBodies();
-    if (gravityEnabled) {
-        applyGravity(); // Appliquer la gravité uniquement si elle est activée
-    }
-    updateForces(t);
-    integrate(t);
-	resolve(narrowphase(broadphase()));
 
-    
-    ticktime += t; // Met à jour le temps du dernier tick
-    return time - ticktime; // Retourne le temps restant
-}
 
 bool sphereHalfSpaceIntersect(QmParticle* particle, QmHalfSpace* halfSpace) {
 	glm::vec3 particlePos = particle->getPos();
@@ -54,57 +40,52 @@ bool intersect(QmAABB a, QmAABB b) {
 		(a.min.z <= b.max.z && a.max.z >= b.min.z);
 }
 
-
-
 std::vector<QmContact> QmWorld::broadphase() {
-	std::vector<QmContact> potentialContacts;
 
-	// Separate dynamic and static bodies
-	std::vector<QmBody*> staticBodies;
-	std::vector<QmBody*> dynamicBodies;
-
-	for (QmBody* body : bodies) {
-		if (dynamic_cast<QmHalfSpace*>(body)) {
-			staticBodies.push_back(body);
-		}
-		else {
-			dynamicBodies.push_back(body);
-		}
+	if (!collisionsEnabled) {
+		return {}; // Retourne une liste vide si les collisions sont désactivées
 	}
 
-	// Check collisions between dynamic bodies
-	for (size_t i = 0; i < dynamicBodies.size(); ++i) {
-		for (size_t j = i + 1; j < dynamicBodies.size(); ++j) {
-			QmParticle* particle1 = dynamic_cast<QmParticle*>(dynamicBodies[i]);
-			QmParticle* particle2 = dynamic_cast<QmParticle*>(dynamicBodies[j]);
 
+	std::vector<QmContact> potentialContacts;
+
+	for (size_t i = 0; i < bodies.size(); ++i) {
+		for (size_t j = i + 1; j < bodies.size(); ++j) {
+			QmBody* body1 = bodies[i];
+			QmBody* body2 = bodies[j];
+
+			// Vérifiez si les deux corps sont des QmParticles
+			QmParticle* particle1 = dynamic_cast<QmParticle*>(body1);
+			QmParticle* particle2 = dynamic_cast<QmParticle*>(body2);
+			QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(body2); // On peut aussi vérifier si body2 est un demi-espace
+
+			// Si les deux particules sont statiques, on les ignore
+			if (particle1 && particle2 && particle1->isStatic && particle2->isStatic) {
+				continue;
+			}
+
+			// Collision entre deux sphères
 			if (particle1 && particle2) {
 				QmAABB aabb1 = particle1->getAABB();
 				QmAABB aabb2 = particle2->getAABB();
 
 				if (intersect(aabb1, aabb2)) {
 					glm::vec3 contactNormal = glm::normalize(particle2->getPos() - particle1->getPos());
-					float penetrationDepth = 0.0f; // Calculate based on actual intersection depth
+					float penetrationDepth = 0.0f;
 					potentialContacts.push_back(QmContact(particle1, particle2, contactNormal, penetrationDepth));
 				}
 			}
-		}
-	}
 
-	// Check collisions between dynamic bodies and static bodies (half spaces)
-	for (QmBody* dynamicBody : dynamicBodies) {
-		QmParticle* particle = dynamic_cast<QmParticle*>(dynamicBody);
-		for (QmBody* staticBody : staticBodies) {
-			QmHalfSpace* halfSpace = dynamic_cast<QmHalfSpace*>(staticBody);
+			// Collision entre une sphère et un demi-espace
+			if (particle1 && halfSpace) {
+				// On peut simplifier la détection de collision pour un demi-espace.
+				float distanceFromPlane = glm::dot(particle1->getPos(), halfSpace->normal) - halfSpace->offset;
 
-			if (particle && halfSpace) {
-				float distanceFromPlane = glm::dot(particle->getPos(), halfSpace->normal) - halfSpace->offset;
-
-				// Check if the particle is below the plane
-				if (sphereHalfSpaceIntersect(particle, halfSpace)) {
+				// Si la particule est en dessous du plan
+				if (sphereHalfSpaceIntersect(particle1, halfSpace)) {
 					glm::vec3 contactNormal = halfSpace->normal;
-					float penetrationDepth = particle->getRadius() - distanceFromPlane; // Calculate penetration
-					potentialContacts.push_back(QmContact(particle, halfSpace, contactNormal, penetrationDepth));
+					float penetrationDepth = particle1->getRadius() - distanceFromPlane;
+					potentialContacts.push_back(QmContact(particle1, halfSpace, contactNormal, penetrationDepth));
 				}
 			}
 		}
@@ -114,6 +95,11 @@ std::vector<QmContact> QmWorld::broadphase() {
 }
 
 std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts) {
+
+	if (!collisionsEnabled) {
+		return {}; // Retourne une liste vide si les collisions sont désactivées
+	}
+
 	std::vector<QmContact> refinedContacts;
 
 	// Parcourir tous les contacts détectés dans la broadphase
@@ -183,8 +169,42 @@ std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts) {
 	return refinedContacts;
 	
 }
+void QmWorld::toggleStaticBodies() {
+	if (staticBodiesEnabled) {
+		// Désactivation des corps statiques - sauvegarde de l'état initial
+		initialStaticBodies.clear();
+		for (QmBody* body : bodies) {
+			QmParticle* particle = dynamic_cast<QmParticle*>(body);
+			if (particle && particle->isStatic) {
+				initialStaticBodies.push_back(particle);
+				particle->isStatic = false;  // Désactive `isStatic`
+			}
+		}
+	}
+	else {
+		// Réactivation des corps statiques pour les corps initialement statiques
+		for (QmParticle* particle : initialStaticBodies) {
+			particle->isStatic = true;
+		}
+		initialStaticBodies.clear();  // Vide la liste après réactivation
+	}
+
+	// Bascule l'état global de `staticBodiesEnabled`
+	staticBodiesEnabled = !staticBodiesEnabled;
+
+	// Affiche le statut des corps statiques
+	std::cout << "Static bodies toggled: "
+		<< (staticBodiesEnabled ? "Enabled" : "Disabled") << std::endl;
+}
+
 
 void QmWorld::resolve(std::vector<QmContact> contacts) {
+
+	if (!collisionsEnabled) {
+		return; // Ne rien faire si les collisions sont désactivées
+
+
+	}
 	for (QmContact& contact : contacts) {
 		// Extraire les deux corps impliqués dans la collision
 		QmParticle* particle1 = dynamic_cast<QmParticle*>(contact.body1);
@@ -271,21 +291,6 @@ void QmWorld::resolve(std::vector<QmContact> contacts) {
 
 }
 
-// Ajout de la méthode interpolate
-void QmWorld::interpolate(float dt)
-{
-    for (QmBody* b : bodies) {
-		if (QmParticle* p = dynamic_cast<QmParticle*>(b)) {
-			if (p->updater) { // Vérifie si l'updater est valide
-				p->updater->update(p->getPos() + dt * p->getVel());
-			}
-			else {
-				std::cerr << "Updater is null for particle!" << std::endl;
-			}
-		}
-
-    }
-}
 
 
 /*
@@ -394,6 +399,39 @@ void QmWorld::integrateRK4(float t) {
 	}
 }
 
+// Ajout de la méthode tick
+float QmWorld::tick(float t)
+{
+	//resetBodies();
+	if (gravityEnabled) {
+		applyGravity(); // Appliquer la gravité uniquement si elle est activée
+	}
+	updateForces(t);
+	integrate(t);
+	resolve(narrowphase(broadphase()));
+
+
+	ticktime += t; // Met à jour le temps du dernier tick
+	return time - ticktime; // Retourne le temps restant
+}
+
+// Ajout de la méthode interpolate
+void QmWorld::interpolate(float dt)
+{
+	for (QmBody* b : bodies) {
+		if (QmParticle* p = dynamic_cast<QmParticle*>(b)) {
+			if (p->updater) { // Vérifie si l'updater est valide
+				p->updater->update(p->getPos() + dt * p->getVel());
+			}
+			else {
+				std::cerr << "Updater is null for particle!" << std::endl;
+			}
+		}
+
+	}
+}
+
+
 
 void QmWorld::integrate(float t)
 {
@@ -409,13 +447,19 @@ void QmWorld::simulate(float t)
     time += t;
     float dt = time - ticktime;
 
-    const float DELTA = 0.016f;
+    const float DELTA = 0.016f; 
 
-    while (dt >= DELTA) {
-		dt = tick(DELTA);
+    if (framerateIndependent) {
+        while (dt >= DELTA) {
+            dt -= DELTA;
+            tick(DELTA);  
+        }
+        interpolate(dt); 
+    } else {
+
+        tick(dt); 
+        interpolate(dt);  
     }
-
-    interpolate(dt); // Interpoler les positions des particules
 }
 
 
@@ -485,6 +529,8 @@ void QmWorld::clear()
 		delete fr;
 	}
 	forceRegistries.clear();
+
+
 }
 
 

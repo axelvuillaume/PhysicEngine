@@ -1,3 +1,5 @@
 ﻿  Application.cpp
+  GxUpdater.cpp
+  Génération de code en cours...
 LINK : warning LNK4075: ' /INCREMENTAL' ignoré à cause de la spécification '/FORCE'
   Application.vcxproj -> C:\Users\Axel\Documents\GitHub\PhysicEngine\x64\Debug\Application.exe

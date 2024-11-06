@@ -6,6 +6,14 @@
 
 using namespace Quantum;
 
+QmParticle::QmParticle(bool isStatic, float radius)
+	: position(0, 0, 0), velocity(0, 0, 0), acceleration(0, 0, 0),
+	forceAccumulator(0, 0, 0), mass(5.0f), charge(0.0f),
+	isAffectedByGravity(false), restitution(0.5f), isStatic(isStatic), radius(radius) // Initialisation de isStatic
+{
+}
+
+
 QmParticle::QmParticle() : position(0, 0, 0), velocity(0, 0, 0), acceleration(0, 0, 0), forceAccumulator(0, 0, 0), mass(5.0f), charge(0.0f), isAffectedByGravity(true), restitution(0.5f)
 {
 }
@@ -23,6 +31,7 @@ QmParticle::QmParticle(glm::vec3 pos, glm::vec3 vel, glm::vec3 acc, float mass, 
 	this->restitution = restitution;
 }
 
+
 QmParticle::~QmParticle()
 {
 	//std::cout << "Particule détruite: " << this << std::endl;
@@ -31,6 +40,7 @@ QmParticle::~QmParticle()
 
 void QmParticle::integrate(float t)
 {
+	if (isStatic) return;
 	glm::vec3 resultantAcc = acceleration + forceAccumulator / mass;
 
 	velocity += t * resultantAcc;  

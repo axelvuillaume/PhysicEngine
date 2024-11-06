@@ -22,6 +22,7 @@ namespace Quantum {
 		void updateForces(float deltaTime);
 		void applyGravity();
 		bool isGravityEnabled();
+		bool collisionsEnabled = true;
 		bool setGravityEnabled(bool gravity);
 		void interpolate(float dt);
 		float tick(float t);
@@ -32,6 +33,13 @@ namespace Quantum {
 		std::vector<QmContact> broadphase();
 		std::vector<QmContact> QmWorld::narrowphase(std::vector<QmContact> contacts);
 		void resolve(std::vector<QmContact> contacts);
+		void enableCollisions(bool enable) {
+			collisionsEnabled = enable;
+		}
+		bool staticBodiesEnabled = true;
+		void QmWorld::toggleStaticBodies();
+		std::vector<QmParticle*> initialStaticBodies;
+		bool framerateIndependent = true;
 
 		void clear();
 	private:

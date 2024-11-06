@@ -40,14 +40,14 @@ int VIEWPORT_X = 5; int VIEWPORT_Y = 5; int VIEWPORT_Z = 200;
 GLuint DrawListSphere;
 
 int buttons = 0;
-float camRotate = 90.f;
+float camRotate = 0.f;
 float camDist = 30.f;
 float camHeight = 0.f;
 float mx = 0.f;
 float my = 0.f;
 float fixedCharge = 1.0f;
 float particleSpawnTimer = 0.0f;
-const float particleSpawnInterval = 0.05f;
+const float particleSpawnInterval = 0.001f;
 QmParticle* cursorControlledParticle = nullptr;
 
 std::vector<QmHalfSpace*> halfSpaces;
@@ -134,13 +134,24 @@ QmParticle* createParticle()
 	return p;
 }
 
+QmParticle* createParticleRadius4(glm::vec3 pos, float radius, float mass)
+{
+
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
+	QmParticle* p = new QmParticle(pos, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), mass, -1, radius);
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
+
 
 
 QmParticle* createFountainParticle(glm::vec3 pos)
 {
 	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
 	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
-	QmParticle* p = new QmParticle(pos, randomVector(9.0f, 10.0f), randomVector(-1, 1),radius = radius);
+	QmParticle* p = new QmParticle(pos, randomVector(-10.0f, 10.0f), randomVector(-1, 1),radius = radius);
 	p->setUpdater(new GxUpdater(g));
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
@@ -180,6 +191,68 @@ QmParticle* createParticleNoGravity()
 	gxWorld.addParticle(g);
 	pxWorld.addBody(p);
 	return p;
+}
+
+QmParticle* createParticleNoColisionGravity() {
+	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, glm::vec3(0, 0, 0));
+	QmParticle* p = new QmParticle(false, radius);
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
+
+QmParticle* staticPlinko() {
+	GxParticle* g = new GxParticle(randomVector(1, 0), 0.09f, glm::vec3(0, 0, 0));
+	QmParticle* p = new QmParticle(false, 0.09f);
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
+
+QmParticle* dynamiquePlinko(int levels) {
+	float spacing = 0.5f; // Espace entre chaque particule
+	float yOffset = -5.0f; // Décalage vers le bas
+	float pyramidHeight = (levels - 1) * spacing + yOffset; // Hauteur maximale de la pyramide
+
+	float xOffset = -5.0f; // Décalage sur l'axe X
+	float zOffset = 10.0f; // Décalage sur l'axe Z
+
+	// Générer une position aléatoire au-dessus de la pyramide
+	glm::vec3 pos = glm::vec3(randomFloat(-7.0f, -3.0f),
+		randomFloat(pyramidHeight + 0.1f, pyramidHeight + 5.0f),
+		randomFloat(2.2f, 6.4f));
+	float radius = 0.1f + 0.2f * ((rand() % 100) / 100.f);
+	GxParticle* g = new GxParticle(randomVector(1, 0), radius, pos);
+	QmParticle* p = new QmParticle(pos, glm::vec3(randomFloat(-2, 2), randomFloat(-2, 2), 0), glm::vec3(randomFloat(-2, 2), randomFloat(-2, 2), 0), 0.5f, -1, radius);
+	p->setUpdater(new GxUpdater(g));
+	gxWorld.addParticle(g);
+	pxWorld.addBody(p);
+	return p;
+}
+
+
+void createStaticPlinkoPyramid(int levels) {
+	float spacing = 0.8f; // Espace entre chaque particule
+	float yOffset = -5.0f; // Décalage vers le bas
+	float zOffset = 5.0f; // Décalage vers la caméra
+	float xOffset = -5.0f; // Décalage sur l'axe X
+
+	for (int i = 0; i < levels; ++i) {
+		int count = levels - i;
+		float offset = -count * spacing * 0.5f;
+		for (int x = 0; x < count; ++x) {
+			for (int z = 0; z < count; ++z) {
+				glm::vec3 pos = glm::vec3((x * spacing + offset) + xOffset,
+					i * spacing + yOffset,
+					(z * spacing + offset) + zOffset);
+				QmParticle* particle = staticPlinko();
+				particle->setPos(pos); // Initialiser la position de la particule
+			}
+		}
+	}
 }
 
 QmParticle* CreateDragParticle2()
@@ -356,12 +429,10 @@ void idleFunc()
 	}
 
 	if (scene == 7) {
-		// Mettre à jour la position de `cursorControlledParticle` pour qu'elle suive le curseur
 		if (cursorControlledParticle) {
 				cursorControlledParticle->setPos(*mousePointer);
 		}
 
-			// Mise à jour des forces dans QmForceRegistry
 		pxWorld.updateForces(dt);
 	}
 
@@ -422,6 +493,7 @@ void initScene1()
 {
 	printf("Scene 1: Random particles.\n");
 	printf("Type space to pause.\n");
+
 
 	for (int i = 0; i < 20; i++)
 		createParticleRadius();
@@ -499,7 +571,6 @@ void initScene6()
 	printf("Scene 6. Qm magnetism Fixed\n");
 	mousePointer = new glm::vec3(0, 4.5, 0);
 
-	// Initialise la force de magnétisme avec la position du curseur
 	sharedFixedMagnetism = new QmFixedMagnetism(1.0f, *mousePointer, fixedCharge);
 	createFixedMagnScene(*mousePointer);
 }
@@ -507,7 +578,7 @@ void initScene6()
 void initScene7()
 {
 	printf("Scene 7. Qm Spring\n");
-	mousePointer = new glm::vec3(0, 4.5, 0);
+	mousePointer = new glm::vec3(0, 0, 0);
 
 	float restLength = 2.0f;
 	float springConstant = 3.0f;
@@ -515,7 +586,7 @@ void initScene7()
 
 	QmForceRegistry* registry = new QmForceRegistry();
 
-	QmParticle* parentParticle = createParticleNoGravity();
+	QmParticle* parentParticle = createParticleNoColisionGravity();
 
 	cursorControlledParticle = parentParticle;
 
@@ -571,18 +642,38 @@ void initScene7()
 void initScene8()
 {
 	printf("Scene 6. Qm magnestism Fixed\n");
-	mousePointer = new glm::vec3(0, 4.5, 0);
 
-	createFixedMagnScene(*mousePointer);
+	dynamiquePlinko(10);
+	dynamiquePlinko(10);
+	dynamiquePlinko(10);
+	dynamiquePlinko(10);
+	dynamiquePlinko(10);
+	dynamiquePlinko(10);
+	createStaticPlinkoPyramid(10);
 }
 
 
 void initScene9()
 {
-	printf("Scene 6. Qm magnestism Fixed\n");
-	mousePointer = new glm::vec3(0, 4.5, 0);
+	printf("Scene 9. ?????????\n");
+	
 
-	createFixedMagnScene(*mousePointer);
+	createParticleRadius4(glm::vec3(0, -5, -10), 5.0f, 5.0f);
+	createParticleRadius4(glm::vec3(0, 1, -10), 1.0f, 1.0f);
+
+
+	createParticleRadius4(glm::vec3(20, -3, -10), 5.0f, 5.0f);
+	createParticleRadius4(glm::vec3(20, -9, -10), 1.0f, 1.0f);
+
+
+	halfSpaces.push_back(new QmHalfSpace(glm::vec3(0, 1, 0), -10.0f)); // Sol
+
+	drawHalfSpaces(halfSpaces);
+
+	for (const auto& halfSpace : halfSpaces) {
+		pxWorld.addBody(halfSpace);
+	}
+
 }
 
 void drawSprings()
@@ -654,8 +745,6 @@ void drawFunc()
 
 	drawHalfSpaces(halfSpaces);
 
-
-
 	glutSwapBuffers();
 }
 
@@ -694,7 +783,7 @@ void clearWorld()
 {
 	gxWorld.clear();
 	pxWorld.clear();
-
+	halfSpaces.clear();
 
 }
 
@@ -774,6 +863,23 @@ void keyFunc(unsigned char key, int x, int y)
 		std::cout << "Gravity toggled: "
 			<< (pxWorld.isGravityEnabled() ? "Enabled" : "Disabled") << std::endl;
 		break;
+
+	case 'c':
+		pxWorld.enableCollisions(!pxWorld.collisionsEnabled);
+		std::cout << "Collisions toggled: "
+			<< (pxWorld.collisionsEnabled ? "Enabled" : "Disabled") << std::endl;
+		break;
+
+	case 's':
+		pxWorld.toggleStaticBodies();
+		break;
+	case 'f':  // Basculer entre framerate indépendant activé/désactivé
+		pxWorld.framerateIndependent = !pxWorld.framerateIndependent;
+		std::cout << "Framerate Independence "
+			<< (pxWorld.framerateIndependent ? "Enabled" : "Disabled")
+			<< std::endl;
+		break;
+
 	case ' ':
 		paused = !paused;
 		break;

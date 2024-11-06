@@ -12,11 +12,14 @@ namespace Quantum {
 	class QmParticle : public QmBody {
 	public:
 		QmParticle();
+		QmParticle::QmParticle(bool isStatic, float radius);
 		QmParticle(glm::vec3, glm::vec3, glm::vec3, float mass = 0.5f, float charge = 0.0f, float radius = 0.5f, float resitution = 0.5f);
 		~QmParticle();
 		virtual void integrate(float t);
 		QmUpdater* updater;
 		bool isAffectedByGravity;
+		bool isStatic;
+		
 		
 		
 		glm::vec3 getAcc();
@@ -47,7 +50,6 @@ namespace Quantum {
 		float charge;
 		float radius;
 		float restitution;
-
 		float damping;
 
 	};
